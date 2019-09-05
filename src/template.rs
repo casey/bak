@@ -44,64 +44,40 @@ impl Template {
   }
 
   pub(crate) fn destination(&self, extension: &OsStr) -> io::Result<PathBuf> {
-    let munged_source = self.filename.to_string_lossy().into_owned();
-
-    let munged_extension = extension.to_string_lossy().into_owned();
-
-    let munged_siblings = self
-      .directory
-      .read_dir()?
-      .map(|result| result.map(|entry| entry.file_name().to_string_lossy().into_owned()))
-      .collect::<io::Result<Vec<String>>>()?;
-
-    let mut present = munged_siblings
-      .iter()
-      // remove the source itself
-      .filter(|sibling| **sibling != munged_source)
-      // remove all siblings where source is not a prefix
-      .filter(|sibling| sibling.starts_with(&munged_source))
-      // remove everything but the prefix (".bak", ".bak.0", as well as non-candidate suffixes)
-      .map(|sibling| &sibling[munged_source.len()..])
-      // filter out suffixes that don't sttart with "."
-      .filter(|suffix| suffix.starts_with("."))
-      // filter out extensions that don't start with ".EXTENSION"
-      .filter(|suffix| suffix[1..].starts_with(&munged_extension))
-      // remove ".EXTENSION"
-      .map(|suffix| &suffix[1 + munged_extension.len()..])
-      // parse numeric extensions into indices
-      // the empty extension (corresponding to ".EXTENSION") is 0
-      // ".EXTENSION.0" is 1
-      // ".EXTENSION.1" is 2
-      // and so forth
-      .flat_map(|n| {
-        if n == "" {
-          Some(0)
-        } else if n.starts_with(".") {
-          n[1..].parse::<u64>().ok().map(|n| n + 1)
-        } else {
-          None
-        }
-      })
-      .collect::<Vec<u64>>();
-
-    present.sort();
-
-    let i = match present.last() {
-      Some(i) => i + 1,
-      None => 0,
+    let filename_with_extension = {
+      let mut filename = self.filename.clone();
+      filename.push(".");
+      filename.push(extension);
+      filename
     };
 
-    let mut destination_filename = self.filename.clone();
+    for n in 0u128.. {
+      let candidate_filename = {
+        let mut candidate_filename = filename_with_extension.clone();
 
-    destination_filename.push(".");
-    destination_filename.push(extension);
+        if n > 0 {
+          candidate_filename.push(".");
+          candidate_filename.push((n - 1).to_string());
+        }
 
-    if i > 0 {
-      destination_filename.push(".");
-      destination_filename.push(&(i - 1).to_string());
+        candidate_filename
+      };
+
+      let candidate = self.directory.join(candidate_filename);
+
+      match fs::symlink_metadata(&candidate) {
+        Ok(_) => continue,
+        Err(io_error) => {
+          if io_error.kind() == io::ErrorKind::NotFound {
+            return Ok(candidate);
+          } else {
+            return Err(io_error);
+          }
+        }
+      }
     }
 
-    Ok(self.directory.join(destination_filename))
+    unreachable!();
   }
 }
 

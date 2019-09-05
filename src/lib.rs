@@ -16,10 +16,6 @@
 //! be moved without actually moving it, call `destination_path(PATH)`
 //! or `destination_with_extension(PATH, EXTENSION)`.
 //!
-//! `bak` skips holes in sequences of backup files. For exmaple, if you
-//! call `bak::move_aside("foo")`, and "foo.bak.12" exists, bak will
-//! move "foo" to "foo.bak.13".
-//!
 //! ## caveats
 //!
 //! - If `bak` is in the middle of renaming a file from `foo` to
@@ -182,14 +178,6 @@ mod tests {
   }
 
   test! {
-    name:        skip_hole,
-    files:       ["foo", "foo.bak", "foo.bak.1"],
-    source:      "foo",
-    extension:   None,
-    destination: "foo.bak.2",
-  }
-
-  test! {
     name:        no_conflicts_ext,
     files:       ["foo"],
     source:      "foo",
@@ -216,14 +204,6 @@ mod tests {
   test! {
     name:        three_conflicts_ext,
     files:       ["foo", "foo.bar", "foo.bar.0", "foo.bar.1"],
-    source:      "foo",
-    extension:   Some("bar"),
-    destination: "foo.bar.2",
-  }
-
-  test! {
-    name:        skip_hole_ext,
-    files:       ["foo", "foo.bar", "foo.bar.1"],
     source:      "foo",
     extension:   Some("bar"),
     destination: "foo.bar.2",
