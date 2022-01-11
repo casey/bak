@@ -46,15 +46,15 @@ impl Template {
   fn make_candidate_for_n(&self, extension: &mut Extension, n: u128) -> PathBuf {
     let mut filename: PathBuf = self.filename.clone().into();
     let is_format_str = extension.is_format_str();
-    let format_n = |n: u128| (['.'].iter().map(|c|*c)).chain(
+    let format_n = |n: u128| (['.'].iter().map(|c|*c)).take(if extension.n_prepend_period { 1 } else { 0 }).chain(
             std::iter::repeat('0').take((extension.n_pad as isize - n.to_string().len() as isize).try_into().unwrap_or(0))
         ).chain(
             n.to_string().chars()
         ).collect::<String>();
 
-    let extension_str = if n > 0 {
+    let mut extension_str = if n > 0 {
         if is_format_str {
-            extension.inner.to_string_lossy().replace("{}", &format_n(n - 1)).replace("{+}", &format_n(n)).replace("{++}", &format_n(n + 2))
+            extension.inner.to_string_lossy().replace("{}", &format_n(n - 1)).replace("{+}", &format_n(n)).replace("{++}", &format_n(n + 1))
         } else {
             let mut ext: String = extension.inner.to_string_lossy().to_string();
             ext.push_str(&format_n(n - 1));
@@ -62,16 +62,16 @@ impl Template {
         }
     } else {
         if is_format_str {
-            let replacement = if extension.n_prepend_period {
-                "."
-            } else {
-                ""
-            };
-            extension.inner.to_string_lossy().replace("{}", replacement).replace("{+}", replacement).replace("{++}", replacement)
+            extension.inner.to_string_lossy().replace("{}", "").replace("{+}", "").replace("{++}", "")
         } else {
             extension.inner.to_string_lossy().to_string()
         }
     };
+    if extension_str.chars().next() == Some('.') {
+        extension_str.remove(0);
+    } else if extension_str.chars().last() == Some('.') {
+        extension_str.pop();
+    }
     filename.set_extension(extension_str);
     filename = self.directory.join(PathBuf::from(filename));
     filename
