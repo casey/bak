@@ -43,27 +43,45 @@ impl Template {
     &self.source
   }
 
-  pub(crate) fn destination(&self, extension: &OsStr) -> io::Result<PathBuf> {
-    let filename_with_extension = {
-      let mut filename = self.filename.clone();
-      filename.push(".");
-      filename.push(extension);
-      filename
-    };
+  fn make_candidate_for_n(&self, extension: &mut Extension, n: u128) -> PathBuf {
+    let mut filename: PathBuf = self.filename.clone().into();
+    let is_format_str = extension.is_format_str();
+    let format_n = |n: u128| (['.'].iter().map(|c|*c)).chain(
+            std::iter::repeat('0').take((extension.n_pad as isize - n.to_string().len() as isize).try_into().unwrap_or(0))
+        ).chain(
+            n.to_string().chars()
+        ).collect::<String>();
 
-    for n in 0u128.. {
-      let candidate_filename = {
-        let mut candidate_filename = filename_with_extension.clone();
-
-        if n > 0 {
-          candidate_filename.push(".");
-          candidate_filename.push((n - 1).to_string());
+    let extension_str = if n > 0 {
+        if is_format_str {
+            extension.inner.to_string_lossy().replace("{}", &format_n(n - 1)).replace("{+}", &format_n(n)).replace("{++}", &format_n(n + 2))
+        } else {
+            let mut ext: String = extension.inner.to_string_lossy().to_string();
+            ext.push_str(&format_n(n - 1));
+            ext
         }
+    } else {
+        if is_format_str {
+            let replacement = if extension.n_prepend_period {
+                "."
+            } else {
+                ""
+            };
+            extension.inner.to_string_lossy().replace("{}", replacement).replace("{+}", replacement).replace("{++}", replacement)
+        } else {
+            extension.inner.to_string_lossy().to_string()
+        }
+    };
+    filename.set_extension(extension_str);
+    filename = self.directory.join(PathBuf::from(filename));
+    filename
+  }
 
-        candidate_filename
-      };
-
-      let candidate = self.directory.join(candidate_filename);
+  pub(crate) fn destination<'a>(&self, extension: impl Into<&'a Extension>) -> io::Result<PathBuf> {
+    let mut extension = extension.into().clone();
+    extension.valid_or_panic();
+    for n in 0u128.. {
+      let candidate = self.make_candidate_for_n(&mut extension, n);
 
       match fs::symlink_metadata(&candidate) {
         Ok(_) => continue,
@@ -86,6 +104,7 @@ mod tests {
   use super::*;
   use crate::testing;
 
+  use std::ffi::OsStr;
   use std::fs;
 
   #[test]

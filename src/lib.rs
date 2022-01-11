@@ -26,31 +26,30 @@
 #![deny(missing_docs)]
 
 mod common;
+pub use common::Extension as BakExtension;
 mod error;
 mod template;
 
 #[cfg(test)]
 mod testing;
 
-const DEFAULT_EXTENSION: &str = "bak";
-
 use crate::common::*;
 
 /// Move aside `path` using the default extension, "bak".
 pub fn move_aside(path: impl AsRef<Path>) -> io::Result<PathBuf> {
-  move_aside_with_extension(path, DEFAULT_EXTENSION)
+  move_aside_with_extension(path, &Extension::new_plain(DEFAULT_EXTENSION.into()))
 }
 
 /// Move aside `path` using `extension`.
-pub fn move_aside_with_extension(
+pub fn move_aside_with_extension<'a>(
   path: impl AsRef<Path>,
-  extension: impl AsRef<OsStr>,
+  extension: impl Into<&'a Extension>,
 ) -> io::Result<PathBuf> {
   let template = Template::new(path.as_ref())?;
 
   let source = template.source();
 
-  let destination = template.destination(extension.as_ref())?;
+  let destination = template.destination(extension.into())?;
 
   fs::rename(source, &destination)?;
 
@@ -60,14 +59,14 @@ pub fn move_aside_with_extension(
 /// Get the destination that `path` would be moved to by `move_aside(path)`
 /// without actually moving it.
 pub fn destination(path: impl AsRef<Path>) -> io::Result<PathBuf> {
-  destination_with_extension(path, DEFAULT_EXTENSION)
+  destination_with_extension(path, Extension::new_plain(DEFAULT_EXTENSION.into()))
 }
 
 /// Get the destination that `path` would be moved to by
 /// `move_aside(path, extension)` without actually moving it.
 pub fn destination_with_extension(
   path: impl AsRef<Path>,
-  extension: impl AsRef<OsStr>,
+  extension: impl AsRef<Extension>,
 ) -> io::Result<PathBuf> {
   Template::new(path.as_ref())?.destination(extension.as_ref())
 }
@@ -97,7 +96,7 @@ mod tests {
 
         let source = PathBuf::from($source);
 
-        let extension: Option<&OsStr> = $extension.map(|extension: &str| extension.as_ref());
+        let extension: Option<Extension> = $extension.map(|extension: &str| Extension::new_plain(extension.into()));
 
         let desired_destination = PathBuf::from($destination);
 
@@ -110,7 +109,7 @@ mod tests {
         }
 
         let planned_destination = match extension {
-          Some(extension) => destination_with_extension(base.join(&source), extension)?,
+          Some(ref extension) => destination_with_extension(base.join(&source), extension)?,
           None => destination(base.join(&source))?,
         };
 
@@ -119,7 +118,7 @@ mod tests {
         assert_eq!(planned_destination, desired_destination);
 
         let actual_destination = match extension {
-          Some(extension) => move_aside_with_extension(base.join(&source), extension)?,
+          Some(ref extension) => move_aside_with_extension(base.join(&source), extension)?,
           None => move_aside(base.join(&source))?,
         };
 
